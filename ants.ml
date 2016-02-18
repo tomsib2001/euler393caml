@@ -22,7 +22,7 @@ let get_neighbour (i,j) d = match d with
   | W -> (i,j-1)
   | E -> (i,j+1);;
 
-let all_dirs = [S;E;N;W];;
+let all_dirs = [N;E;S;W];;
 
 let get_neighbours n (i,j) = List.filter (admissible n) (List.map (get_neighbour (i,j)) all_dirs);;
 
@@ -65,6 +65,42 @@ let make_from_to_mat n =
   res;;
 
 let to_from4 = make_from_to_mat 4;;
+
+let check_for_lonesome_cells_rows mat n =
+  let j = ref 0 in
+  let res = ref false in
+  let counter = ref 0 in
+  while(!j < n && not(!res)) do
+    for i = 0 to n-1 do
+      if (mat.(i).(!j) = def_pair) then
+	counter := !counter + 1
+    done;
+    if !counter = 1 then res := true;
+    j := !j +1
+  done;
+  !res;;
+
+let check_for_lonesome_cells_cols mat n =
+  let i = ref 0 in
+  let res = ref false in
+  let counter = ref 0 in
+  while(!i < n && not(!res)) do
+    for j = 0 to n-1 do
+      if (mat.(!i).(j) = def_pair) then
+	counter := !counter + 1
+    done;
+    if !counter = 1 then res := true;
+    i := !i +1
+  done;
+  !res;;
+
+let efficiency_counter = ref 0;;
+
+let check_for_lonesome_cells mat n =
+  let res = check_for_lonesome_cells_cols mat n || check_for_lonesome_cells_rows mat n in
+  if res then efficiency_counter := !efficiency_counter + 1;
+  res
+;;
 
 let get_next_available mat n print_cell =
   let i = ref 0 in
@@ -155,31 +191,32 @@ let find_all_cycle_dec n =
 	| (From(Some _),To(Some _)) -> 0
 	| (From(None),To(Some cell)) as oldi1j1 -> (* closing a cycle *)
 	  if cell = opp dir then 0 else
-	    begin
-	      (* first update (i,j) to take into account visit to (i1,j1) *)
-	      let (from1,towards1) = from_to_n.(i).(j) in
-	      from_to_n.(i).(j) <- (from1,To(Some(dir)));
-	      (* now update "from" field in (i1,j1) to finish the cycle *)
-	      from_to_n.(i1).(j1) <- (From(Some(opp dir)),To(Some cell));
-	      (* Printf.printf "finished a cycle at (%d,%d)! \n" i1 j1; *)
-	      (* print_matrix print_pair from_to_n n; *)
-	      (* find an ant from which to start the next cycle *)
-	      let new_guy = get_next_available from_to_n n print_pair in
-	      let temp = (match new_guy with
-		| None ->
+	    if check_for_lonesome_cells from_to_n n then 0 else
+	      begin
+		(* first update (i,j) to take into account visit to (i1,j1) *)
+		let (from1,towards1) = from_to_n.(i).(j) in
+		from_to_n.(i).(j) <- (from1,To(Some(dir)));
+		(* now update "from" field in (i1,j1) to finish the cycle *)
+		from_to_n.(i1).(j1) <- (From(Some(opp dir)),To(Some cell));
+	        (* Printf.printf "finished a cycle at (%d,%d)! \n" i1 j1; *)
+	        (* print_matrix print_pair from_to_n n; *)
+	        (* find an ant from which to start the next cycle *)
+		let new_guy = get_next_available from_to_n n print_pair in
+		let temp = (match new_guy with
+		  | None ->
 		  (* Printf.printf "\n no new cycle to start\n"; (\* we have succeeded in filling the graph with cycles *\) *)
 		  (* print_matrix (print_pair) from_to_n n; *)  1
-		| Some ng ->
+		  | Some ng ->
 		  (* let (a,b) = ng in *)
 		  (* Printf.printf "starting a new cycle at  (%d, %d)\n" a b;  *)(* new cycle starting from lowest node in lexicographic order *)
-		(* now recurse on this new ant *)
-		  aux ng
-	      ) in
+		  (* now recurse on this new ant *)
+		    aux ng
+		) in
 		(* and then reestablish past situation *)
-		from_to_n.(i).(j) <- (from1,towards1);
-		from_to_n.(i1).(j1) <- oldi1j1(* (From(None),To(Some cell)) *);
-		temp
-	    end
+			   from_to_n.(i).(j) <- (from1,towards1);
+			   from_to_n.(i1).(j1) <- oldi1j1(* (From(None),To(Some cell)) *);
+			   temp
+	      end
 	| (From(None),To(None)) ->
 	  (* Printf.printf "continuing current cycle with (%d,%d)\n" i1 j1; *)
 	  (* print_matrix (print_pair) from_to_n n; *)
@@ -192,10 +229,12 @@ let find_all_cycle_dec n =
 	  from_to_n.(i1).(j1) <- (From(None),To(None));
 	  temp
 	| (From(Some _),To(None)) -> failwith "never happens"
-      )
-      neighbs)
-  in aux (0,0);;
+       )
+		  neighbs)
+       in aux (0,0);;
 
-let res = find_all_cycle_dec 8;;
+let res = find_all_cycle_dec 6;;
+
+Printf.printf "efficiency_counter: %d\n" !efficiency_counter;;
 
 Printf.printf "result: %d\n" res;;
