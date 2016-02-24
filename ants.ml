@@ -136,6 +136,55 @@ let get_next_available mat n print_cell =
 
 (* get_next_available to_from4  4;; *)
 
+(* some tools to manipulate graphs *)
+type cell = int*int
+type graph = cell list
+
+let shift (g : graph) ((i,j) : cell) =
+  List.map (fun (x,y) -> (x-i,y-j)) g;;
+
+let sort_graph (g : graph) = 
+  List.sort_uniq 
+    (fun (a,b) (c,d) -> 
+      match Pervasives.compare a c with
+      | 0 -> Pervasives.compare b d
+      | k -> k)
+    g;;
+
+let canonical (g : graph) =
+  let g1 = sort_graph g in
+  shift g1 (List.hd g1);;
+
+let example_graph = [(6,7);(1,2);(1,2);(2,1)];;
+sort_graph example_graph;;
+let can_g = canonical example_graph;;
+
+module Cell = struct 
+  type t = cell
+  let compare = (fun (a,b) (c,d) -> 
+      match Pervasives.compare a c with
+      | 0 -> Pervasives.compare b d
+      | k -> k)
+end;;
+module CellSet = Set.Make(Cell);;
+
+let build_graph (start : cell) (mat : (from*towards) array array) neighbour_mat =
+  let empty = CellSet.empty in
+  let rec aux cur_set (i,j) =
+    let temp = List.fold_right (fun x (y,b) -> 
+      let (i1,j1) = x in
+      let b1 = 
+	if not(CellSet.mem x y) then 
+	  true 
+	else 
+	  b in 
+      (if mat.(i1).(j1) = def_pair then 
+	  CellSet.add x y 
+       else 
+	  y),b1) neighbour_mat.(i).(j) (cur_set,false)
+    in aux empty start;;
+  
+
 let sumlist l = List.fold_right (+) l 0;;
 
 let print_matrix print_cell mat n =
@@ -233,7 +282,7 @@ let find_all_cycle_dec n =
 		  neighbs)
        in aux (0,0);;
 
-let res = find_all_cycle_dec 6;;
+let res = find_all_cycle_dec 4;;
 
 Printf.printf "efficiency_counter: %d\n" !efficiency_counter;;
 
