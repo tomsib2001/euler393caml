@@ -32,7 +32,7 @@ let opp_flow = function
   | Out -> In
   | Zero -> Zero;;
 
-type cell = (flow option) array;;
+type cell = (flow option) array;; (* size 4 *)
 
 let (def_cell : cell) = [|None;None;None;None|];;
 
@@ -81,6 +81,19 @@ let lift_array_indices (t : 'a array) = (Array.mapi (fun i x -> (i,x)) t);;
 let no_other_f (c : cell) (j : int) (f : flow) =
   not(List.exists (fun (k,x) -> x = Some f && k <> j) (Array.to_list (lift_array_indices c)));;
 
+let array_count (c : cell) f=
+  let count = ref 0 in
+  for i = 0 to 3 do
+    if (f i) then
+      count := !count + 1
+  done;
+  !count;;
+
+let not_more_than_two_zeros (c : cell) (j : int) =
+  array_count c (fun i -> i<> j && c.(i) = Some Zero ) <= 2;;
+
+(* not_more_than_two_zeros [|Some Zero; Some Zero; Some Zero; Some Out|] 2;; *)
+
 let not_all_others_are_zero (c : cell) (j : int) =
   not(array_for_all (fun (i,x) -> i=j || (c.(i)) = Some Zero) (lift_array_indices c));;
       
@@ -95,9 +108,17 @@ let correct_assignment (c : constrt) (l : flow option array array) (i : int) (j 
   | (i,d) -> true)
   &&
     (match f with
-    | Zero -> not_all_others_are_zero l.(i) j
+    | Zero -> not_more_than_two_zeros l.(i) j
     | f -> no_other_f l.(i) j f
-    );;
+    )
+  &&
+    (
+      if (i>0 && j = int_of_dir W) then
+	(l.(i-1).(int_of_dir E) = Some(opp_flow f))
+      else
+	true
+    )
+;;
 
 let print_flow = function
   | In -> print_string " in |"
@@ -120,7 +141,7 @@ let find_all_sols (l : line) (c : constrt) =
   let n = size l in
   let next (k,i) = if i=3 then (k+1,0) else (k,i+1) in
   let rec aux = function
-    | (k,0) when k = n -> (* print_option_flow_array l; *) let l1 = Array.copy l in [l1]
+    | (k,0) when k = n -> print_option_flow_array l; let l1 = Array.copy l in [l1]
     | (k,i) ->
        begin
 	 assert(i<4);
@@ -151,7 +172,8 @@ let find_all_sols (l : line) (c : constrt) =
 
 (* examples *)
 
-let constr_1 = [|Out;Out;Zero;In;Zero|];;
+let constr_0 = Array.make 4 Zero;;
+let constr_1 = [|Out;In;Zero;In;Zero;Out|];;
 
 let line = make_template_line constr_1;;
 
@@ -163,8 +185,45 @@ correct_assignment (constr_1) (make_template_line constr_1) 0 (int_of_dir E) Zer
 line.(0).(int_of_dir E) <- Some Out;;
 correct_assignment (constr_1) line 0 (int_of_dir S) Out;;
 
-let all_sols = find_all_sols (make_template_line constr_1) constr_1;;
-List.length all_sols;;
+let all_sols = find_all_sols (make_template_line constr_0) constr_0;;
+
+Printf.printf "size : %d\n" (List.length all_sols);;
+
+let extract_constrt (l : line) =
+  print_option_flow_array l;
+  Array.map (fun c -> get_val (c.(int_of_dir S))) l;;
+
+let solve_general n =
+  let m = n/2 in
+  if 2*m <> n then 0 else
+    begin
+      let constr0 = (Array.make n Zero) in
+      let line = (make_template_line constr0) in
+      let h = Hashtbl.create 100000 in
+      let first_line = find_all_sols line constr0 in
+      List.iter (fun x -> Hashtbl.add h x 1) first_line;
+      let rec aux old_pats = function
+	| k when k = m+1 -> Hashtbl.fold (fun x card y -> y + card*card) old_pats 0
+	| k -> let new_h = Hashtbl.create 100000 in
+	       Hashtbl.iter
+		 (fun x (card : int) ->
+		   let cstr = (extract_constrt x) in
+		   let neighbs = find_all_sols (make_template_line cstr) cstr in
+		   List.iter
+		     (fun y ->
+		       let old_card = try Hashtbl.find new_h y with
+			 | Not_found -> 0 in
+		       Hashtbl.add new_h y (old_card + 1)
+		     )
+		     neighbs
+		 )
+		 old_pats;
+	       aux new_h (k+1)
+      in
+      aux h 1
+    end;;
+
+solve_general 4;;
 (* end examples *)
 
 (* let find_all_compatible_lines (c : constrt) = *)
