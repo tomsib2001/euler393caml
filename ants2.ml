@@ -232,7 +232,7 @@ let solve_general n =
       let first_line = find_all_sols line constr0 in
       List.iter (fun x -> update h x 1) (List.map extract_constrt first_line);
       let rec aux (old_pats : (flow array,int) Hashtbl.t) = function
-	| k when k = m -> Hashtbl.fold (fun c card y -> print_constrt c; Printf.printf "%d\n\n " card; y + card*card) old_pats 0
+	| k when k = m -> Hashtbl.fold (fun c card y -> (* print_constrt c; Printf.printf "%d\n\n " card; *) y + card*card) old_pats 0
 	| k -> print_string ("treating line "^(string_of_int k)^"\n");
 	   let new_h = Hashtbl.create 100000 in
 	       Hashtbl.iter
@@ -240,7 +240,7 @@ let solve_general n =
 		   let neighbs = List.map extract_constrt (find_all_sols (make_template_line cstr) cstr) in
 		   List.iter
 		     (fun y ->
-		       update new_h y 1
+		       update new_h y card
 		     )
 		     neighbs
 		 )
@@ -250,7 +250,7 @@ let solve_general n =
       aux h 1
     end;;
 
-let res = solve_general 6 in
+let res = solve_general 10 in
 Printf.printf "result: %d\n" res;;
 ;;
 (* end examples *)
