@@ -96,7 +96,10 @@ let not_more_than_two_zeros (c : cell) (j : int) =
 
 let not_all_others_are_zero (c : cell) (j : int) =
   not(array_for_all (fun (i,x) -> i=j || (c.(i)) = Some Zero) (lift_array_indices c));;
-      
+
+let at_least_two_flows_or_unknown (c : cell) (j : int) =
+  array_count c (fun i -> i<> j && (c.(i) <> Some Zero)) >= 2;;
+
 let correct_assignment (c : constrt) (l : flow option array array) (i : int) (j : int) (f : flow) =
   let n = size c in
   assert(size l = n);
@@ -108,8 +111,8 @@ let correct_assignment (c : constrt) (l : flow option array array) (i : int) (j 
   | (i,d) -> true)
   &&
     (match f with
-    | Zero -> not_more_than_two_zeros l.(i) j
-    | f -> no_other_f l.(i) j f
+    | Zero -> not_more_than_two_zeros l.(i) j && at_least_two_flows_or_unknown l.(i) j
+    | f -> no_other_f l.(i) j f && not_more_than_two_zeros l.(i) j
     )
   &&
     (
@@ -137,11 +140,23 @@ let print_option_flow_array t =
     print_string " || ";
     done; print_newline();;
 
+let matrix_copy m =
+  let n1 = size m in
+  let n2 = size m.(0) in
+  assert (n1 > 0 && n2 > 0);
+  let res = Array.make_matrix n1 n2 m.(0).(0) in    
+  for i = 0 to n1 - 1 do
+    for j = 0 to n2 - 1 do
+      res.(i).(j) <- m.(i).(j)
+    done
+  done;
+  res;;
+
 let find_all_sols (l : line) (c : constrt) =
   let n = size l in
   let next (k,i) = if i=3 then (k+1,0) else (k,i+1) in
   let rec aux = function
-    | (k,0) when k = n -> print_option_flow_array l; let l1 = Array.copy l in [l1]
+    | (k,0) when k = n -> (* print_option_flow_array l; *) let l1 = matrix_copy l in [l1]
     | (k,i) ->
        begin
 	 assert(i<4);
@@ -173,7 +188,7 @@ let find_all_sols (l : line) (c : constrt) =
 (* examples *)
 
 let constr_0 = Array.make 4 Zero;;
-let constr_1 = [|Out;In;Zero;In;Zero;Out|];;
+let constr_1 = [|Out;Out;Zero;Out;Out;Out|];;
 
 let line = make_template_line constr_1;;
 
@@ -190,8 +205,22 @@ let all_sols = find_all_sols (make_template_line constr_0) constr_0;;
 Printf.printf "size : %d\n" (List.length all_sols);;
 
 let extract_constrt (l : line) =
-  print_option_flow_array l;
+  (* print_option_flow_array l; *)
   Array.map (fun c -> get_val (c.(int_of_dir S))) l;;
+
+let print_constrt (c : constrt) =
+  print_string "pattern: ";
+  for i = 0 to (size c)-1 do
+    print_flow c.(i)
+  done; print_newline();;
+     
+
+let update h x value=
+  let old_val = try Hashtbl.find h x with
+    | Not_found -> 0 in
+  let new_val = (old_val + value) in
+  (* Printf.printf "new val : %d\n" new_val; *)
+  Hashtbl.replace h x new_val;;
 
 let solve_general n =
   let m = n/2 in
@@ -199,21 +228,19 @@ let solve_general n =
     begin
       let constr0 = (Array.make n Zero) in
       let line = (make_template_line constr0) in
-      let h = Hashtbl.create 100000 in
+      let (h : (flow array,int) Hashtbl.t) = Hashtbl.create 100000 in
       let first_line = find_all_sols line constr0 in
-      List.iter (fun x -> Hashtbl.add h x 1) first_line;
-      let rec aux old_pats = function
-	| k when k = m+1 -> Hashtbl.fold (fun x card y -> y + card*card) old_pats 0
-	| k -> let new_h = Hashtbl.create 100000 in
+      List.iter (fun x -> update h x 1) (List.map extract_constrt first_line);
+      let rec aux (old_pats : (flow array,int) Hashtbl.t) = function
+	| k when k = m -> Hashtbl.fold (fun c card y -> print_constrt c; Printf.printf "%d\n\n " card; y + card*card) old_pats 0
+	| k -> print_string ("treating line "^(string_of_int k)^"\n");
+	   let new_h = Hashtbl.create 100000 in
 	       Hashtbl.iter
-		 (fun x (card : int) ->
-		   let cstr = (extract_constrt x) in
-		   let neighbs = find_all_sols (make_template_line cstr) cstr in
+		 (fun cstr (card : int) ->
+		   let neighbs = List.map extract_constrt (find_all_sols (make_template_line cstr) cstr) in
 		   List.iter
 		     (fun y ->
-		       let old_card = try Hashtbl.find new_h y with
-			 | Not_found -> 0 in
-		       Hashtbl.add new_h y (old_card + 1)
+		       update new_h y 1
 		     )
 		     neighbs
 		 )
@@ -223,7 +250,9 @@ let solve_general n =
       aux h 1
     end;;
 
-solve_general 4;;
+let res = solve_general 6 in
+Printf.printf "result: %d\n" res;;
+;;
 (* end examples *)
 
 (* let find_all_compatible_lines (c : constrt) = *)
